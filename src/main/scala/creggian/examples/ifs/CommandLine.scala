@@ -1,13 +1,12 @@
 package creggian.examples.ifs
 
+import creggian.ml.feature.IterativeFeatureSelection
 import org.apache.spark._
+import org.apache.spark.ml.linalg.{Vector, Vectors}
+import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.mllib.util.MLUtils
-import org.apache.spark.mllib.linalg.{Vector, Vectors}
-import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-
-import creggian.ml.feature.IterativeFeatureSelection
 
 object CommandLine {
     def main(args: Array[String]) {
@@ -45,7 +44,7 @@ object CommandLine {
                 val label = arr(labelIdx).toDouble
                 val v = arr.take(labelIdx) ++ arr.drop(labelIdx + 1)
                 val dv = Vectors.dense(v.map(_.toDouble))
-                new LabeledPoint(label, dv.compressed)
+                LabeledPoint(label, dv.compressed)
             })
             
             val rdd = data.repartition(numPartitions = nPartition).persist(StorageLevel.MEMORY_AND_DISK_SER)
@@ -55,7 +54,7 @@ object CommandLine {
         }
         
         if (inputFormat == "libsvm") {
-            val data = MLUtils.loadLibSVMFile(sc, filename).map(lp => new LabeledPoint(lp.label, lp.features.compressed))
+            val data = MLUtils.loadLibSVMFile(sc, filename).map(lp => LabeledPoint(lp.label, lp.features.compressed.asML))
             
             val rdd = data.repartition(numPartitions = nPartition).persist(StorageLevel.MEMORY_AND_DISK_SER)
             val clVector = if (typeWise == "row-wise") Vectors.dense(sc.textFile(args(6)).first().split(",").map(_.toDouble)) else null
@@ -64,16 +63,14 @@ object CommandLine {
         }
     }
     
-    def start(sc: SparkContext, data: RDD[(LabeledPoint)], typeWise: String, nfs: Int, clVector: Vector) {
+    def start(sc: SparkContext, data: RDD[LabeledPoint], typeWise: String, nfs: Int, clVector: Vector) {
         printStats(data)
-        
-        val ifs = new IterativeFeatureSelection()
-        
-        if (typeWise == "column-wise") this.printResults(ifs.columnWise(sc, data, nfs))
-        if (typeWise == "row-wise")    this.printResults(ifs.rowWise(sc, data, nfs, clVector))
+
+        if (typeWise == "column-wise") this.printResults(IterativeFeatureSelection.columnWise(data, nfs))
+        if (typeWise == "row-wise") this.printResults(IterativeFeatureSelection.rowWise(data, nfs, clVector))
     }
     
-    def printStats(data: RDD[(LabeledPoint)]): Unit = {
+    def printStats(data: RDD[LabeledPoint]): Unit = {
         val nRows: Long = data.count()
         val nCols: Int = data.first.features.size
         val nData: Int = data.map(x => x.features.numNonzeros + 1).reduce(_ + _)
@@ -85,7 +82,7 @@ object CommandLine {
         println("-- number or non-zero points: " + nData)
     }
     
-    def printResults(res: Array[(Long, Double)]) {
+    def printResults(res: Seq[(Int, Double)]) {
         println("\nSelected Features:")
         println("Order\tName\tScore")
         for (i <- res.indices) {

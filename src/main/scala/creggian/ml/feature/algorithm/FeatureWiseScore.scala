@@ -1,9 +1,9 @@
 package creggian.ml.feature.algorithm
 
-import org.apache.spark.mllib.linalg.Vector
-import org.apache.spark.mllib.regression.LabeledPoint
+import org.apache.spark.ml.feature.LabeledPoint
+import org.apache.spark.ml.linalg.Vector
 
-abstract class FeatureWiseAbstractScore extends Serializable {
+trait FeatureWiseScore extends Serializable {
     
     def getResult(featureVector: Vector,
                   classVector: Vector,

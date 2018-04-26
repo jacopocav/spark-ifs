@@ -1,10 +1,10 @@
 package creggian.ml.feature.algorithm
 
-abstract class InstanceWiseAbstractScore extends Serializable {
-    
-    def getResult(matWithClass: Seq[Seq[Long]],
-                  matWithFeatures: Seq[Seq[Seq[Long]]],
-                  selectedVariablesSeq: Seq[Long],
+trait InstanceWiseScore extends Serializable {
+
+    def getResult(matWithClass: Seq[Seq[Int]],
+                  matWithFeatures: Seq[Seq[Seq[Int]]],
+                  selectedVariablesSeq: Seq[Int],
                   variableLevels: Seq[Double],
                   classLevels: Seq[Double],
                   i: Int,

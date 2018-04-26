@@ -18,29 +18,27 @@ package creggian.ml.feature.algorithm
 
 import creggian.ml.feature.MutualInformation
 
-class InstanceWiseMRMR extends InstanceWiseAbstractScore {
-    
-    private def mrmrMutualInformation(matWithClass: Seq[Seq[Long]], matWithFeatures: Seq[Seq[Seq[Long]]], selectedVariablesIdx: Seq[Long]): Double = {
+object InstanceMRMR extends InstanceWiseScore {
+
+    def getResult(matWithClass: Seq[Seq[Int]], matWithFeatures: Seq[Seq[Seq[Int]]], selectedVariablesIdx: Seq[Int], variableLevels: Seq[Double], classLevels: Seq[Double], i: Int, nfs: Int): Double = {
+        mrmrMutualInformation(matWithClass, matWithFeatures, selectedVariablesIdx)
+    }
+
+    private def mrmrMutualInformation(matWithClass: Seq[Seq[Int]], matWithFeatures: Seq[Seq[Seq[Int]]], selectedVariablesIdx: Seq[Int]): Double = {
 
         val mrmrClass = MutualInformation.compute(matWithClass)
-    
+
         var mrmrFeatures = 0.0
         for (f <- matWithFeatures) {
             mrmrFeatures = mrmrFeatures + MutualInformation.compute(f)
         }
-    
+
         var coefficient = 1.0
         if (selectedVariablesIdx.length > 1) {
             coefficient = 1.0 / selectedVariablesIdx.length.toDouble
         }
         mrmrClass - (coefficient * mrmrFeatures)
     }
-    
-    def getResult(matWithClass: Seq[Seq[Long]], matWithFeatures: Seq[Seq[Seq[Long]]], selectedVariablesIdx: Seq[Long], variableLevels: Seq[Double], classLevels: Seq[Double], i: Int, nfs: Int): Double = {
-        mrmrMutualInformation(matWithClass, matWithFeatures, selectedVariablesIdx)
-    }
-    
-    override def selectTop(i: Int, nfs: Int): Int = {
-        1
-    }
+
+    override def selectTop(i: Int, nfs: Int): Int = 1
 }

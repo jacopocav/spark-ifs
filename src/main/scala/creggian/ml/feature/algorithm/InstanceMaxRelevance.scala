@@ -18,14 +18,14 @@ package creggian.ml.feature.algorithm
 
 import creggian.ml.feature.MutualInformation
 
-class InstanceWiseMaxRelevance extends InstanceWiseAbstractScore {
-    
-    private def mrmrMutualInformation(matWithClass: Seq[Seq[Long]]): Double = {
-        MutualInformation.compute(matWithClass)
-    }
-    
-    def getResult(matWithClass: Seq[Seq[Long]], matWithFeatures: Seq[Seq[Seq[Long]]], selectedVariablesIdx: Seq[Long], variableLevels: Seq[Double], classLevels: Seq[Double], i: Int, nfs: Int): Double = {
+object InstanceMaxRelevance extends InstanceWiseScore {
+
+    def getResult(matWithClass: Seq[Seq[Int]], matWithFeatures: Seq[Seq[Seq[Int]]], selectedVariablesIdx: Seq[Int], variableLevels: Seq[Double], classLevels: Seq[Double], i: Int, nfs: Int): Double = {
         mrmrMutualInformation(matWithClass)
+    }
+
+    private def mrmrMutualInformation(matWithClass: Seq[Seq[Int]]): Double = {
+        MutualInformation.compute(matWithClass)
     }
     
     override def selectTop(i: Int, nfs: Int): Int = {

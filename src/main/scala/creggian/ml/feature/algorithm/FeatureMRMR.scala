@@ -17,18 +17,18 @@
 package creggian.ml.feature.algorithm
 
 import creggian.ml.feature.MutualInformation
-import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector}
-import org.apache.spark.mllib.regression.LabeledPoint
+import org.apache.spark.ml.feature.LabeledPoint
+import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector}
 
 import scala.collection.immutable.Range
 
-class FeatureWiseMRMR extends FeatureWiseAbstractScore {
+object FeatureMRMR extends FeatureWiseScore {
     
     private def mutualInformationDiscrete(a: Vector, b: Vector, aLevels: Array[Double], bLevels: Array[Double]): Double = {
     
         if (a.size != b.size) throw new RuntimeException("Vectors 'a' and 'b' must have the same length: a = " + a.size + " - b = " + b.size)
-        
-        val mat = Seq.fill[Long](bLevels.length, aLevels.length)(0L)
+
+        val mat = Seq.fill[Int](bLevels.length, aLevels.length)(0)
         
         val aIdx = a match {
             case v: SparseVector => v.indices.toIndexedSeq

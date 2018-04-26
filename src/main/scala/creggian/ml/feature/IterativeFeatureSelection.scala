@@ -1,161 +1,122 @@
 package creggian.ml.feature
 
-import creggian.collection.mutable.SparseIndexArray
-import creggian.ml.feature.algorithm.{FeatureWiseAbstractScore, FeatureWiseMRMR, InstanceWiseAbstractScore, InstanceWiseMRMR}
-import org.apache.spark._
-import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector, Vectors}
-import org.apache.spark.mllib.regression.LabeledPoint
+import creggian.collection.mutable._
+import creggian.ml.feature.algorithm.{FeatureMRMR, FeatureWiseScore, InstanceMRMR, InstanceWiseScore}
+import org.apache.spark.SparkException
+import org.apache.spark.ml.feature.LabeledPoint
+import org.apache.spark.ml.linalg.{Matrices, Vector, Vectors}
 import org.apache.spark.rdd.RDD
 
-import scala.collection.immutable.Map
+import scala.collection.immutable.{Map, Vector => ScalaVector}
+import scala.collection.mutable
 import scala.collection.mutable.{Map => MMap}
 
-class IterativeFeatureSelection {
-    
-    def columnWise(sc: SparkContext, data: RDD[LabeledPoint], nfs: Int, score: InstanceWiseAbstractScore = new InstanceWiseMRMR): Array[(Long, Double)] = {
-        
-        val classValuesTable:    Map[Double, Long]             = data.map(x => (x.label, 1L)).reduceByKey(_ + _).collect().toMap
-        val selectedValuesTable: MMap[Long, Map[Double, Long]] = MMap[Long, Map[Double, Long]]()
-        
-        val classLevels:            Array[Double]     = classValuesTable.keys.toArray
-        val featuresLevelsNotZero : Array[Double]     = data.map({
-            case (LabeledPoint(_, v: SparseVector)) => v.values.distinct
-            case (LabeledPoint(_, v: DenseVector))  => v.values.distinct
-        }).reduce((x, y) => (x ++ y).distinct)
-        
-        val featuresLevels = (featuresLevelsNotZero ++ Array(0.0)).distinct
-        
-        val classValuesTable_bc = sc.broadcast(classValuesTable)
-        val classLevels_bc      = sc.broadcast(classLevels)
-        val featuresLevels_bc   = sc.broadcast(featuresLevels)
-        
-        // scala reflection
-        //val tb    = universe.runtimeMirror(getClass.getClassLoader).mkToolBox()
-        
-        val nCols: Int  = data.first.features.size
-        
-        val candidateIdx     = new SparseIndexArray(nCols, dense=true)
-        val selectedIdx      = new SparseIndexArray(nCols, dense=false)
-        var selectedIdxScore = Array[Double]()
-        
+object IterativeFeatureSelection {
+
+    val maxCategories = 10000
+
+    def columnWise(data: RDD[LabeledPoint], nfs: Int, score: InstanceWiseScore = InstanceMRMR): ScalaVector[(Int, Double)] = {
+        val labelCounts = data.map(x => (x.label, 1)).reduceByKey(_ + _).collect.toMap
+        val selectedFeatureCounts = MMap[Int, Map[Double, Int]]()
+
+        var colNum: Option[Int] = None
+        val labelDomain = labelCounts.keys.toArray
+        val featuresDomain = data.map({
+            case LabeledPoint(_, v: Vector) =>
+                if (colNum.isEmpty) colNum = Some(v.size)
+                v.toArray.toSet
+
+        }).reduce(_ union _) + 0.0
+
+        val labelCounts_bc = data.context.broadcast(labelCounts)
+        val labelDomain_bc = data.context.broadcast(labelDomain)
+        val featuresDomain_bc = data.context.broadcast(featuresDomain.toVector)
+
+        val candidateIdx = IndexArray.dense(colNum.get).fill()
+        val selectedIdx = IndexArray.sparse(colNum.get)
+        var selectedIdxScore = mutable.LinearSeq.empty[Double]
+
         for (i <- 1 to score.maxIterations(nfs)) {
-            
-            val candidateIdx_bc        = sc.broadcast(candidateIdx)
-            val selectedIdx_bc         = sc.broadcast(selectedIdx)
-            val selectedValuesTable_bc = sc.broadcast(selectedValuesTable)
-            
-            val contingencyTableItems = data.mapPartitions(iter => {
-                val caIdx = candidateIdx_bc.value
-                val seIdx = selectedIdx_bc.value
-                val cl    = classLevels_bc.value
-                val fl    = featuresLevels_bc.value
-    
-                // ((candidateFeatureIdx, otherFeatureIdx, candidateIdxCT, otherFeatureIdxCT), count)
-                val matWithClassMap    = MMap[(Long, Long, Int, Int), Long]()
-                val matWithFeaturesMap = MMap[(Long, Long, Int, Int), Long]()
-                
-                while (iter.hasNext) {
-                    val lp = iter.next
-                    val label = lp.label
-                    val features = lp.features
-                    
-                    features match {
-                        case v: SparseVector =>
-                            for (fcIdx <- v.indices) {
-                                if (caIdx.contains(fcIdx)) {
-                                    val value            = features(fcIdx.toInt)
-                                    val classValueIdxMat = cl.indexWhere(_ == label)
-                                    val valueIdxMat      = fl.indexWhere(_ == value)
-        
-                                    val matWithClassMapKey = (fcIdx.toLong, -1L, valueIdxMat, classValueIdxMat)  // -1L represent the class idx, it is used as placeholder
-        
-                                    val matWithClass = if (matWithClassMap.contains(matWithClassMapKey)) matWithClassMap(matWithClassMapKey) else 0L
-                                    matWithClassMap(matWithClassMapKey) = matWithClass + 1L
-        
-                                    for (fsIdx <- seIdx.getAdded) {
-                                        val valueSelected       = features(fsIdx.toInt)
-                                        val valueSelectedIdxMat = fl.indexWhere(_ == valueSelected)
-                                        val valueIdxMat         = fl.indexWhere(_ == value)
-            
-                                        val matWithFeaturesMapKey = (fcIdx.toLong, fsIdx, valueIdxMat, valueSelectedIdxMat)
-            
-                                        val matWithFeatures = if (matWithFeaturesMap.contains(matWithFeaturesMapKey)) matWithFeaturesMap(matWithFeaturesMapKey) else 0L
-                                        matWithFeaturesMap(matWithFeaturesMapKey) = matWithFeatures + 1L
-                                    }
-                                }
+
+            val candidateIdx_bc = data.context.broadcast(candidateIdx)
+            val selectedIdx_bc = data.context.broadcast(selectedIdx)
+            val selectedFeatureCounts_bc = data.context.broadcast(selectedFeatureCounts)
+
+            val contingencyTableItems = data.mapPartitions(it => {
+                val i_c = candidateIdx_bc.value
+                val i_s = selectedIdx_bc.value
+                val d_l = labelDomain_bc.value
+                val d_f = featuresDomain_bc.value
+
+                // key = ((candidate index, -1, candidate value index, candidate label value index), count)
+                val labelMatrix = MMap[(Int, Int, Int, Int), Int]()
+                //key = ((candidate index, selected feat. index, candidate value index, selected feat. value index), count)
+                val featureMatrix = MMap[(Int, Int, Int, Int), Int]()
+
+                it foreach { p =>
+                    val features = p.features
+
+                    features foreachActive { (fi, fv) =>
+
+                        if (i_c.contains(fi) && fv != 0.0) {
+                            val labelIndex = d_l.indexOf(p.label)
+                            val valIndex = d_f.indexOf(fv)
+
+                            val lkey = (fi, -1, valIndex, labelIndex) // -1 is a placeholder for the label column index
+
+                            labelMatrix(lkey) = labelMatrix.getOrElse(lkey, 0) + 1
+
+                            for (sfi <- i_s.indices) {
+                                val selectedValIndex = d_f.indexOf(features(sfi))
+
+                                val fkey = (fi, sfi, valIndex, selectedValIndex)
+
+                                featureMatrix(fkey) = featureMatrix.getOrElse(fkey, 0) + 1
                             }
-                        case v: DenseVector =>
-                            for (fcIdx <- 0L until v.size) {
-                                if (caIdx.contains(fcIdx) && features(fcIdx.toInt) != 0.0) {
-                                    val value            = features(fcIdx.toInt)
-                                    val classValueIdxMat = cl.indexWhere(_ == label)
-                                    val valueIdxMat      = fl.indexWhere(_ == value)
-    
-                                    val matWithClassMapKey = (fcIdx.toLong, -1L, valueIdxMat, classValueIdxMat)  // -1L represent the class idx, it is used as placeholder
-    
-                                    val matWithClass = if (matWithClassMap.contains(matWithClassMapKey)) matWithClassMap(matWithClassMapKey) else 0L
-                                    matWithClassMap(matWithClassMapKey) = matWithClass + 1L
-    
-                                    for (fsIdx <- seIdx.getAdded) {
-                                        val valueSelected       = features(fsIdx.toInt)
-                                        val valueSelectedIdxMat = fl.indexWhere(_ == valueSelected)
-                                        val valueIdxMat         = fl.indexWhere(_ == value)
-        
-                                        val matWithFeaturesMapKey = (fcIdx.toLong, fsIdx, valueIdxMat, valueSelectedIdxMat)
-        
-                                        val matWithFeatures = if (matWithFeaturesMap.contains(matWithFeaturesMapKey)) matWithFeaturesMap(matWithFeaturesMapKey) else 0L
-                                        matWithFeaturesMap(matWithFeaturesMapKey) = matWithFeatures + 1L
-                                    }
-                                }
-                            }
-                        case other =>
-                            throw new UnsupportedOperationException(
-                                s"Only sparse and dense vectors are supported but got ${other.getClass}.")
+                        }
                     }
                 }
-                
-                (matWithClassMap.toList ++ matWithFeaturesMap.toList).iterator
+                (labelMatrix.toSeq ++ featureMatrix.toSeq).iterator
             })
-    
-            val contingencyTableItemsReduce = contingencyTableItems.reduceByKey(_ + _)
-            
-            val contingencyTablesKV = contingencyTableItemsReduce.map(x => (x._1._1, (x._1._2, x._1._3, x._1._4, x._2)))
-            
-            val candidateScores = contingencyTablesKV.groupByKey.map(entry => {
+
+            val candidateScores = contingencyTableItems.reduceByKey(_ + _).map {
+                case ((ci, sfi, vi, svi), c) => (ci, (sfi, vi, svi, c))
+            }.groupByKey.map { entry =>
+
                 val (key, buffer) = entry
-                
-                val cvt = classValuesTable_bc.value
-                val fvt = selectedValuesTable_bc.value
-                val cl = classLevels_bc.value
-                val fl = featuresLevels_bc.value
+
+                val cvt = labelCounts_bc.value
+                val fvt = selectedFeatureCounts_bc.value
+                val cl = labelDomain_bc.value
+                val fl = featuresDomain_bc.value
                 val cln = cl.length
                 val fln = fl.length
-    
+
                 // create the intermediate data structures for discrete features
-                val matWithClass       = Seq.fill[Long](cln, fln)(0)
-                val matWithFeaturesMap = MMap[Long, Seq[Seq[Long]]]()
-                
+                val matWithClass = Seq.fill[Int](cln, fln)(0)
+                val matWithFeaturesMap = MMap[Int, ScalaVector[ScalaVector[Int]]]()
+
                 // fill in the data from the Map step into the intermediate data structures
                 val iter = buffer.iterator
                 while (iter.hasNext) {
                     val item = iter.next
                     val (otherIdx, fcMatIdx, otherMatIdx, value) = item
-    
-                    if (otherIdx == -1L) {
+
+                    if (otherIdx == -1) {
                         matWithClass(otherMatIdx)(fcMatIdx) = value
                     } else {
                         if (matWithFeaturesMap.contains(otherIdx)) matWithFeaturesMap(otherIdx)(otherMatIdx)(fcMatIdx) = value
                         else {
-                            matWithFeaturesMap(otherIdx) = Seq.fill[Long](fln, fln)(0)
+                            matWithFeaturesMap(otherIdx) = ScalaVector.fill[Int](fln, fln)(0)
                             matWithFeaturesMap(otherIdx)(otherMatIdx)(fcMatIdx) = value
                         }
                     }
                 }
-                
+
                 // to save bandwidth, we did not produced tuples where the candidate
                 // feature's value id zero. This is particularly useful in sparse datasets
                 // but it can save also some space in dense datasets.
-                val fcIdxCtZero = fl.indexWhere(_ == 0.0)
+                val fcIdxCtZero = fl.indexOf(0.0)
                 val marginalSum = matWithClass.map(_.sum)
                 for (i <- 0 until cln) {
                     val totRowI = if (cvt.contains(cl(i))) cvt(cl(i)) else 0L
@@ -175,80 +136,139 @@ class IterativeFeatureSelection {
                         matWithFeaturesMap(fsIdx)(i)(fcIdxCtZero) = totRowI - marginalSum(i)
                     }
                 }
-    
+
                 // create the missing data structured needed for the interface score class
                 val selectedFeaturesIdx = matWithFeaturesMap.keys.toSeq
-                val matWithFeatures     = matWithFeaturesMap.values.toSeq
-                
+                val matWithFeatures = matWithFeaturesMap.values.toSeq
+
                 val candidateScore = score.getResult(matWithClass, matWithFeatures, selectedFeaturesIdx, fl, cl, i, nfs)
-                
+
                 (key, candidateScore)
-            })
-    
+            }
+
             val results = candidateScores.takeOrdered(score.selectTop(i, nfs))(Ordering[Double].reverse.on(_._2))
-            
+
             for (ri <- results.indices) {
                 // Example of step3 output (key, score) = (2818,0.8462824341015066)
-                val novelSelectedFeatureIdx   = results(ri)._1
+                val novelSelectedFeatureIdx = results(ri)._1
                 val novelSelectedFeatureScore = results(ri)._2
-    
+
                 selectedIdx.add(novelSelectedFeatureIdx)
-                selectedIdxScore = selectedIdxScore ++ Array(novelSelectedFeatureScore)
-                selectedValuesTable(novelSelectedFeatureIdx) = data.map(x => (x.features(novelSelectedFeatureIdx.toInt), 1L)).reduceByKey(_ + _).collect().toMap
+                selectedIdxScore :+= novelSelectedFeatureScore
+                selectedFeatureCounts(novelSelectedFeatureIdx) = data.map(x => (x.features(novelSelectedFeatureIdx.toInt), 1)).reduceByKey(_ + _).collect().toMap
                 candidateIdx.remove(novelSelectedFeatureIdx)
             }
         }
-        
-        selectedIdx.getAdded.toArray.zip(selectedIdxScore)
+
+        selectedIdx.indices.toArray[Int].zip(selectedIdxScore).toVector
     }
-    
-    def rowWise(sc: SparkContext, data: RDD[LabeledPoint], nfs: Int, classVector: Vector, score: FeatureWiseAbstractScore = new FeatureWiseMRMR): Array[(Long, Double)] = {
-        
-        val clVector_bc = sc.broadcast(classVector)
-        
+
+    def rowWise(data: RDD[LabeledPoint], nfs: Int, classVector: Vector, score: FeatureWiseScore = FeatureMRMR): Array[(Int, Double)] = {
+
+        val clVector_bc = data.context.broadcast(classVector)
+
         var selectedVariableScore = Array[Double]()
         var selectedVariable = Array[LabeledPoint]()
-        
-        // scala reflection
-        //val tb = universe.runtimeMirror(getClass.getClassLoader).mkToolBox()
-        //val score = tb.eval(tb.parse("new " + score + "()")).asInstanceOf[FeatureWiseAbstractScore]
-        
+
         for (i <- 1 to score.maxIterations(nfs)) {
-            
-            val selectedVariable_bc = sc.broadcast(selectedVariable)
+
+            val selectedVariable_bc = data.context.broadcast(selectedVariable)
             val varrCandidate = data.filter(x => !selectedVariable_bc.value.map(lp => lp.label).contains(x.label))
-            
+
             val candidateScores = varrCandidate.map(x => {
                 val candidateScore = score.getResult(x.features, clVector_bc.value, selectedVariable_bc.value, i, nfs)
                 (x.label, candidateScore)
             })
-            
+
             val results = candidateScores.takeOrdered(score.selectTop(i, nfs))(Ordering[Double].reverse.on(_._2))
-    
+
             for (ri <- results.indices) {
                 val novelSelectedFeatureLabel = results(ri)._1
                 val novelSelectedFeatureScore = results(ri)._2
-    
-                val newSelectedLabel_bc = sc.broadcast(novelSelectedFeatureLabel)
+
+                val newSelectedLabel_bc = data.context.broadcast(novelSelectedFeatureLabel)
                 val newSelectedLPAll = varrCandidate.filter(x => x.label == newSelectedLabel_bc.value)
-    
+
                 if (newSelectedLPAll.count() != 1L) throw new RuntimeException("Error: Multiple features with the same ID")
-    
+
                 val newSelectedLP = newSelectedLPAll.first()
-    
+
                 selectedVariableScore = selectedVariableScore ++ Array(novelSelectedFeatureScore)
                 selectedVariable = selectedVariable ++ Array(newSelectedLP)
             }
         }
-    
-        selectedVariable.map(x => x.label.toLong).zip(selectedVariableScore)
+
+        selectedVariable.map(x => x.label.toInt).zip(selectedVariableScore)
     }
-    
-    def compress(rdd: RDD[LabeledPoint], selectedIdx: Array[Long]): RDD[LabeledPoint] = {
+
+    def compress(rdd: RDD[LabeledPoint], selectedIdx: Array[Int]): RDD[LabeledPoint] = {
         rdd.map(x => {
             val label = x.label
-            val features = Vectors.dense(selectedIdx.map(idx => x.features(idx.toInt)))
-            new LabeledPoint(label, features.compressed)
+            val features = Vectors.dense(selectedIdx.map(idx => x.features(idx)))
+            LabeledPoint(label, features.compressed)
         })
+    }
+
+    def chiSquaredFeatures(data: RDD[LabeledPoint],
+                           score: InstanceWiseScore = InstanceMRMR): Array[Any] = {
+        val numCols = data.first().features.size
+        val results = new Array[Any](numCols)
+        var labels: Map[Double, Int] = null
+        // at most 1000 columns at a time
+        val batchSize = 1000
+        var batch = 0
+        while (batch * batchSize < numCols) {
+            // The following block of code can be cleaned up and made public as
+            // chiSquared(data: RDD[(V1, V2)])
+            val startCol = batch * batchSize
+            val endCol = startCol + math.min(batchSize, numCols - startCol)
+            val pairCounts = data.mapPartitions { iter =>
+                val distinctLabels = mutable.HashSet.empty[Double]
+                val allDistinctFeatures: Map[Int, mutable.HashSet[Double]] =
+                    Map((startCol until endCol).map(col => (col, mutable.HashSet.empty[Double])): _*)
+                var i = 1
+                iter.flatMap { case LabeledPoint(label, features) =>
+                    if (i % batchSize == 0) {
+                        if (distinctLabels.size > maxCategories) {
+                            throw new SparkException(s"Chi-square test expect factors (categorical values) but "
+                                    + s"found more than $maxCategories distinct label values.")
+                        }
+                        allDistinctFeatures.foreach { case (col, distinctFeatures) =>
+                            if (distinctFeatures.size > maxCategories) {
+                                throw new SparkException(s"Chi-square test expect factors (categorical values) but "
+                                        + s"found more than $maxCategories distinct values in column $col.")
+                            }
+                        }
+                    }
+                    i += 1
+                    distinctLabels += label
+                    (startCol until endCol).map { col =>
+                        val feature = features(col)
+                        allDistinctFeatures(col) += feature
+                        (col, feature, label)
+                    }
+                }
+            }.countByValue()
+
+            if (labels == null) {
+                // Do this only once for the first column since labels are invariant across features.
+                labels =
+                        pairCounts.keys.filter(_._1 == startCol).map(_._3).toArray.distinct.zipWithIndex.toMap
+            }
+            val numLabels = labels.size
+            pairCounts.keys.groupBy(_._1).foreach { case (col, keys) =>
+                val features = keys.map(_._2).toArray.distinct.zipWithIndex.toMap
+                val numRows = features.size
+                val contingency = Matrices.zeros(numRows, numLabels)
+                keys.foreach { case (_, feature, label) =>
+                    val i = features(feature)
+                    val j = labels(label)
+                    contingency(i, j) += pairCounts((col, feature, label))
+                }
+                results(col) = ???
+            }
+            batch += 1
+        }
+        results
     }
 }

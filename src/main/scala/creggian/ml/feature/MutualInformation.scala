@@ -2,7 +2,7 @@ package creggian.ml.feature
 
 object MutualInformation {
 
-    def compute(matrix: Seq[Seq[Long]]): Double = {
+    def compute(matrix: Seq[Seq[Int]]): Double = {
 
         val tot = matrix.flatten.sum.toDouble
         val colSums = matrix.transpose.map(_.sum.toDouble)
@@ -21,7 +21,6 @@ object MutualInformation {
                 }
             }
         }
-
         mi
     }
 
