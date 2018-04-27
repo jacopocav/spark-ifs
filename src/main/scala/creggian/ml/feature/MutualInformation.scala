@@ -1,5 +1,6 @@
 package creggian.ml.feature
 
+
 object MutualInformation {
 
     def compute(matrix: Seq[Seq[Int]]): Double = {

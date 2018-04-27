@@ -1,5 +1,7 @@
 package creggian.ml.feature.algorithm
 
+import org.apache.spark.ml.linalg.Matrix
+
 trait InstanceWiseScore extends Serializable {
 
     def getResult(matWithClass: Seq[Seq[Int]],
@@ -17,5 +19,7 @@ trait InstanceWiseScore extends Serializable {
     def maxIterations(nfs: Int): Int = {
         nfs
     }
-    
+
+    def getResult(labelContingency: Matrix, featuresContingencies: Traversable[Matrix]): Double = 0.0
+
 }

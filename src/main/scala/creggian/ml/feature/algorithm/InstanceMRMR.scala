@@ -17,6 +17,7 @@
 package creggian.ml.feature.algorithm
 
 import creggian.ml.feature.MutualInformation
+import org.apache.spark.ml.linalg.Matrix
 
 object InstanceMRMR extends InstanceWiseScore {
 
@@ -28,17 +29,26 @@ object InstanceMRMR extends InstanceWiseScore {
 
         val mrmrClass = MutualInformation.compute(matWithClass)
 
-        var mrmrFeatures = 0.0
-        for (f <- matWithFeatures) {
-            mrmrFeatures = mrmrFeatures + MutualInformation.compute(f)
-        }
+        val mrmrFeatures = matWithFeatures.foldLeft(0.0)((a, f) => a + MutualInformation.compute(f))
 
-        var coefficient = 1.0
-        if (selectedVariablesIdx.length > 1) {
-            coefficient = 1.0 / selectedVariablesIdx.length.toDouble
-        }
+        val coefficient =
+            if (selectedVariablesIdx.length > 1)
+                1.0 / selectedVariablesIdx.length
+            else
+                1.0
+
         mrmrClass - (coefficient * mrmrFeatures)
     }
 
     override def selectTop(i: Int, nfs: Int): Int = 1
+
+    override def getResult(labelContingency: Matrix, featuresContingencies: Traversable[Matrix]): Double = {
+        val labelScore = MutualInformation.compute(labelContingency.toArray.map(_.toInt).toSeq.grouped(labelContingency.numCols).toSeq)
+
+        val featuresScore = featuresContingencies.foldLeft(0.0) { (acc, mat) =>
+            acc + MutualInformation.compute(mat.toArray.map(_.toInt).toSeq.grouped(mat.numCols).toSeq)
+        }
+
+        val coefficient
+    }
 }
