@@ -9,7 +9,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 
 object CommandLine {
-    def main(args: Array[String]) {
+    /*def main(args: Array[String]) {
         run(args)
     }
     
@@ -94,6 +94,6 @@ object CommandLine {
             println(idx + "\t" + vName + "\t" + v)
         }
         println()
-    }
+    }*/
 }
 

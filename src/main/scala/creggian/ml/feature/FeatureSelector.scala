@@ -38,11 +38,13 @@ class FeatureSelector(override val uid: String) extends Estimator[FeatureSelecto
     override def fit(dataset: Dataset[_]): FeatureSelectorModel = {
         transformSchema(dataset.schema, logging = true)
 
-        val input: RDD[LabeledPoint] = dataset.select(dataset(labelCol).cast(DataTypes.DoubleType), dataset(featuresCol)).rdd.map {
+        val input: RDD[LabeledPoint] = dataset.select(dataset($(labelCol)).cast(DataTypes.DoubleType), dataset($(featuresCol))).rdd.map {
             case Row(label: Double, features: Vector) => LabeledPoint(label, features)
         }
-        val selectedFeatures = IterativeFeatureSelection.columnWise(input, $(numTopFeatures)).map(_._1)
+        val selectedFeatures = IterativeFeatureSelection.select(input, $(numTopFeatures)).map(_._1)
         new FeatureSelectorModel(selectedFeatures).setParent(this)
+                .setFeaturesCol($(featuresCol))
+                .setOutputCol($(outputCol))
     }
 
     override def transformSchema(schema: StructType): StructType = {
@@ -60,16 +62,19 @@ class FeatureSelector(override val uid: String) extends Estimator[FeatureSelecto
 class FeatureSelectorModel private[ml](override val uid: String, val selectedFeatures: Seq[Int])
         extends Model[FeatureSelectorModel] with FeatureSelectorParams {
 
-    private val slicer = new VectorSlicer()
-            .setInputCol($(featuresCol))
-            .setOutputCol($(outputCol))
-            .setIndices(selectedFeatures.sorted.toArray)
+    private val slicer = new VectorSlicer().setIndices(selectedFeatures.sorted.toArray)
 
     def this(selectedFeatures: Seq[Int]) = this(Identifiable.randomUID("featureSelectorModel"), selectedFeatures)
 
-    def setFeaturesCol(value: String): this.type = set(featuresCol -> value)
+    def setFeaturesCol(value: String): this.type = {
+        slicer.setInputCol(value)
+        set(featuresCol -> value)
+    }
 
-    def setOutputCol(value: String): this.type = set(outputCol -> value)
+    def setOutputCol(value: String): this.type = {
+        slicer.setOutputCol(value)
+        set(outputCol -> value)
+    }
 
     override def transform(dataset: Dataset[_]): DataFrame = slicer.transform(dataset)
 

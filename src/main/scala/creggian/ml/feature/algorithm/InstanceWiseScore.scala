@@ -1,6 +1,7 @@
 package creggian.ml.feature.algorithm
 
-import org.apache.spark.ml.linalg.Matrix
+import creggian.ml.feature.MutualInformation
+import breeze.linalg.Matrix
 
 trait InstanceWiseScore extends Serializable {
 
@@ -12,14 +13,62 @@ trait InstanceWiseScore extends Serializable {
                   i: Int,
                   nfs: Int): Double
     
-    def selectTop(i: Int, nfs: Int): Int = {
-        1
-    }
+    def selectTop(i: Int, nfs: Int): Int
     
-    def maxIterations(nfs: Int): Int = {
-        nfs
-    }
+    def maxIterations(nfs: Int): Int = nfs
 
-    def getResult(labelContingency: Matrix, featuresContingencies: Traversable[Matrix]): Double = 0.0
+    def getResult(labelContingency: Matrix[Long], featuresContingencies: Iterable[Matrix[Long]], selectedVariables: Seq[Int]): Double
 
 }
+
+object InstanceMRMR extends InstanceWiseScore {
+
+    def getResult(matWithClass: Seq[Seq[Int]], matWithFeatures: Seq[Seq[Seq[Int]]], selectedVariablesIdx: Seq[Int], variableLevels: Seq[Double], classLevels: Seq[Double], i: Int, nfs: Int): Double = {
+        mrmrMutualInformation(matWithClass, matWithFeatures, selectedVariablesIdx)
+    }
+
+    private def mrmrMutualInformation(matWithClass: Seq[Seq[Int]], matWithFeatures: Seq[Seq[Seq[Int]]], selectedVariablesIdx: Seq[Int]): Double = {
+
+        val mrmrClass = MutualInformation.compute(matWithClass.map(_.map(_.toLong)))
+
+        val mrmrFeatures = matWithFeatures.foldLeft(0.0)((a, f) => a + MutualInformation.compute(f.map(_.map(_.toLong))))
+
+        val coefficient =
+            if (selectedVariablesIdx.length > 1)
+                1.0 / selectedVariablesIdx.length
+            else
+                1.0
+
+        mrmrClass - (coefficient * mrmrFeatures)
+    }
+
+    override def selectTop(i: Int, nfs: Int): Int = 1
+
+    def getResult(labelContingency: Matrix[Long], featuresContingencies: Iterable[Matrix[Long]], selectedVariables: Seq[Int]): Double = {
+        val labelScore = MutualInformation.compute(labelContingency)
+
+        val featuresScore = featuresContingencies.foldLeft(0.0) { (acc, mat) =>
+            acc + MutualInformation.compute(mat)
+        }
+
+        val coefficient =
+            if (selectedVariables.length > 1) 1.0 / selectedVariables.length
+            else 1.0
+
+        labelScore - (coefficient * featuresScore)
+    }
+}
+
+/*object InstanceMaxRelevance extends InstanceWiseScore {
+
+    def getResult(matWithClass: Seq[Seq[Int]], matWithFeatures: Seq[Seq[Seq[Int]]], selectedVariablesIdx: Seq[Int], variableLevels: Seq[Double], classLevels: Seq[Double], i: Int, nfs: Int): Double = {
+        mrmrMutualInformation(matWithClass)
+    }
+
+    private def mrmrMutualInformation(matWithClass: Seq[Seq[Int]]): Double = {
+        MutualInformation.compute(matWithClass)
+    }
+
+    override def selectTop(i: Int, nfs: Int): Int = nfs
+
+}*/

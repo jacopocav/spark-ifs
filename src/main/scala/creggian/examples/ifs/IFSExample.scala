@@ -7,7 +7,7 @@ import org.apache.spark.mllib.util.MLUtils
 import creggian.ml.feature.IterativeFeatureSelection
 
 object IFSExample {
-    def main(args: Array[String]): Unit = {
+    /*def main(args: Array[String]): Unit = {
         val sparkConf = new SparkConf().setAppName("IFS Example")
         val sc        = new SparkContext(sparkConf)
         
@@ -21,5 +21,5 @@ object IFSExample {
         val rddRed  = ifs.compress(rdd, results.map(_._1))
     
         println(rddRed.first().toString())
-    }
+    }*/
 }

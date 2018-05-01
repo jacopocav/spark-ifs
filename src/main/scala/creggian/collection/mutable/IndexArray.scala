@@ -16,6 +16,8 @@ trait IndexArray extends Serializable {
 
     def contains(index: Int): Boolean
 
+    final def apply(index: Int): Boolean = contains(index)
+
     def indices: Seq[Int]
 
     def fill(): this.type
@@ -24,12 +26,12 @@ trait IndexArray extends Serializable {
 class SparseIndexArray(override val length: Int) extends IndexArray {
     private val indexSet: mutable.Set[Int] = mutable.SortedSet.empty
 
-    def add(index: Int): this.type = {
+    def add(index: Int): SparseIndexArray.this.type = {
         if (index < length) indexSet += index
         this
     }
 
-    def remove(index: Int): this.type = {
+    def remove(index: Int): SparseIndexArray.this.type = {
         if (index < length) indexSet -= index
         this
     }
@@ -38,7 +40,7 @@ class SparseIndexArray(override val length: Int) extends IndexArray {
 
     def indices: Seq[Int] = indexSet.toSeq
 
-    def fill(): this.type = {
+    def fill(): SparseIndexArray.this.type = {
         indexSet ++= (0 until length)
         this
     }
