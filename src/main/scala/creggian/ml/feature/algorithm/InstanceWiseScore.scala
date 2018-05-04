@@ -1,7 +1,7 @@
 package creggian.ml.feature.algorithm
 
-import creggian.ml.feature.MutualInformation
 import breeze.linalg.Matrix
+import creggian.ml.feature.MutualInformation
 
 trait InstanceWiseScore extends Serializable {
 
@@ -17,7 +17,7 @@ trait InstanceWiseScore extends Serializable {
     
     def maxIterations(nfs: Int): Int = nfs
 
-    def getResult(labelContingency: Matrix[Long], featuresContingencies: Iterable[Matrix[Long]], selectedVariables: Seq[Int]): Double
+    def getResult(labelContingency: Matrix[Long], featuresContingencies: Iterable[Matrix[Long]]): Double
 
 }
 
@@ -44,7 +44,7 @@ object InstanceMRMR extends InstanceWiseScore {
 
     override def selectTop(i: Int, nfs: Int): Int = 1
 
-    def getResult(labelContingency: Matrix[Long], featuresContingencies: Iterable[Matrix[Long]], selectedVariables: Seq[Int]): Double = {
+    def getResult(labelContingency: Matrix[Long], featuresContingencies: Iterable[Matrix[Long]]): Double = {
         val labelScore = MutualInformation.compute(labelContingency)
 
         val featuresScore = featuresContingencies.foldLeft(0.0) { (acc, mat) =>
@@ -52,8 +52,8 @@ object InstanceMRMR extends InstanceWiseScore {
         }
 
         val coefficient =
-            if (selectedVariables.length > 1) 1.0 / selectedVariables.length
-            else 1.0
+            if (featuresContingencies.nonEmpty) 1.0 / featuresContingencies.size
+            else 0.0
 
         labelScore - (coefficient * featuresScore)
     }
