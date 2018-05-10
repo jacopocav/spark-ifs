@@ -1,4 +1,4 @@
-package creggian.ml.feature
+package ifs.ml.feature
 
 import org.apache.spark.ml.feature.{LabeledPoint, VectorSlicer}
 import org.apache.spark.ml.linalg.SQLDataTypes.VectorType
@@ -41,7 +41,7 @@ class FeatureSelector(override val uid: String) extends Estimator[FeatureSelecto
         val input: RDD[LabeledPoint] = dataset.select(dataset($(labelCol)).cast(DataTypes.DoubleType), dataset($(featuresCol))).rdd.map {
             case Row(label: Double, features: Vector) => LabeledPoint(label, features)
         }
-        val selectedFeatures = IterativeFeatureSelection.select(input, $(numTopFeatures)).map(_._1)
+        val selectedFeatures = IterativeFeatureSelection.selectColumns(input, $(numTopFeatures)).map(_._1)
         new FeatureSelectorModel(selectedFeatures).setParent(this)
                 .setFeaturesCol($(featuresCol))
                 .setOutputCol($(outputCol))

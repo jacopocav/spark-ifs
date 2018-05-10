@@ -1,18 +1,12 @@
-package creggian.ml.feature.algorithm
+package ifs.ml.feature.algorithm
 
-import creggian.ml.feature.MutualInformation
+import ifs.ml.feature.MutualInformation
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector}
 
-import scala.collection.mutable
-
 trait FeatureWiseScore extends Serializable {
-    
-    def getResult(featureVector: Vector,
-                  classVector: Vector,
-                  selectedVariablesArray: Array[LabeledPoint],
-                  i: Int,
-                  nfs: Int): Double
+
+    def getResult(featureVector: Vector, classVector: Vector, selectedVariablesArray: Seq[LabeledPoint], i: Int, nfs: Int): Double
     
     def selectTop(i: Int, nfs: Int): Int = 1
     
@@ -22,11 +16,43 @@ trait FeatureWiseScore extends Serializable {
 
 object FeatureMRMR extends FeatureWiseScore {
 
+    def getResult(featureVector: Vector, classVector: Vector, selectedVariablesArray: Seq[LabeledPoint], i: Int, nfs: Int): Double = {
+        this.mrmrMutualInformation(featureVector, classVector, selectedVariablesArray)
+    }
+
+    private def mrmrMutualInformation(featureVector: Vector, classVector: Vector, selectedVariablesArray: Seq[LabeledPoint]) = {
+
+        val classLevels = classVector match {
+            case v: SparseVector => v.values.distinct ++ Array(0.0)
+            case v: DenseVector => v.values.distinct
+        }
+        val variableLevelsAll = for (vector <- Array(featureVector) ++ selectedVariablesArray.map(x => x.features)) yield {
+            vector match {
+                case v: SparseVector => v.values.distinct ++ Array(0.0)
+                case v: DenseVector => v.values.distinct
+            }
+        }
+        val variableLevels = variableLevelsAll.reduce(_ ++ _).distinct
+
+        val mrmrClass = mutualInformationDiscrete(featureVector, classVector, variableLevels, classLevels)
+
+        var mrmrFeatures = 0.0
+        for (j <- selectedVariablesArray.indices) {
+            val sLP = selectedVariablesArray(j)
+            mrmrFeatures = mrmrFeatures + mutualInformationDiscrete(featureVector, sLP.features, variableLevels, variableLevels)
+        }
+
+        var coefficient = 1.0
+        if (selectedVariablesArray.length > 1) coefficient = 1.0 / selectedVariablesArray.length.toDouble
+
+        mrmrClass - (coefficient * mrmrFeatures)
+    }
+
     private def mutualInformationDiscrete(a: Vector, b: Vector, aLevels: Array[Double], bLevels: Array[Double]): Double = {
 
         if (a.size != b.size) throw new RuntimeException("Vectors 'a' and 'b' must have the same length: a = " + a.size + " - b = " + b.size)
 
-        val mat = mutable.Seq.fill[Long](bLevels.length, aLevels.length)(0)
+        val mat = Array.fill[Long](bLevels.length, aLevels.length)(0)
 
         val aIdx = a match {
             case v: SparseVector => v.indices.toIndexedSeq
@@ -68,38 +94,4 @@ object FeatureMRMR extends FeatureWiseScore {
 
         MutualInformation.compute(mat)
     }
-
-    private def mrmrMutualInformation(featureVector: Vector, classVector: Vector, selectedVariablesArray: Array[LabeledPoint]): Double = {
-
-        val classLevels = classVector match {
-            case v: SparseVector => v.values.distinct ++ Array(0.0)
-            case v: DenseVector  => v.values.distinct
-        }
-        val variableLevelsAll = for (vector <- Array(featureVector) ++ selectedVariablesArray.map(x => x.features)) yield {
-            vector match {
-                case v: SparseVector => v.values.distinct ++ Array(0.0)
-                case v: DenseVector  => v.values.distinct
-            }
-        }
-        val variableLevels = variableLevelsAll.reduce(_ ++ _).distinct
-
-        val mrmrClass = mutualInformationDiscrete(featureVector, classVector, variableLevels, classLevels)
-
-        var mrmrFeatures = 0.0
-        for (j <- selectedVariablesArray.indices) {
-            val sLP = selectedVariablesArray(j)
-            mrmrFeatures = mrmrFeatures + mutualInformationDiscrete(featureVector, sLP.features, variableLevels, variableLevels)
-        }
-
-        var coefficient = 1.0
-        if (selectedVariablesArray.length > 1) coefficient = 1.0 / selectedVariablesArray.length.toDouble
-
-        mrmrClass - (coefficient * mrmrFeatures)
-    }
-
-    def getResult(featureVector: Vector, classVector: Vector, selectedVariablesArray: Array[LabeledPoint], i: Int, nfs: Int): Double = {
-        this.mrmrMutualInformation(featureVector, classVector, selectedVariablesArray)
-    }
-
-    override def selectTop(i: Int, nfs: Int): Int = 1
 }

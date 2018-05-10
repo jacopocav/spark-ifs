@@ -1,12 +1,4 @@
-package creggian.examples.ifs
-
-import creggian.ml.feature.IterativeFeatureSelection
-import org.apache.spark._
-import org.apache.spark.ml.linalg.{Vector, Vectors}
-import org.apache.spark.ml.feature.LabeledPoint
-import org.apache.spark.mllib.util.MLUtils
-import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel
+package ifs.examples
 
 object CommandLine {
     /*def main(args: Array[String]) {

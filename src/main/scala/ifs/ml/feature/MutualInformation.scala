@@ -1,11 +1,11 @@
-package creggian.ml.feature
+package ifs.ml.feature
 
 import breeze.linalg.Matrix
 
 
 object MutualInformation {
 
-    def compute(matrix: Seq[Seq[Long]]): Double = {
+    def compute(matrix: Array[Array[Long]]): Double = {
 
         val colSums = matrix.transpose.map(_.sum.toDouble)
         val tot = colSums.sum
@@ -27,7 +27,7 @@ object MutualInformation {
         mi
     }
 
-    def compute(a: Seq[Double], b: Seq[Double]): Double = {
+    def compute(a: Array[Double], b: Array[Double]): Double = {
         require(a.length == b.length, s"Vectors a and b must have the same length: ${a.length} != ${b.length}")
 
         val ab = b.zip(a)
