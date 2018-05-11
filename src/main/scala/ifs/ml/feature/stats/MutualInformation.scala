@@ -1,7 +1,7 @@
 package ifs.ml.feature.stats
 
 import breeze.linalg.Matrix
-import ifs.util.implicits._
+import ifs.util.extensions._
 
 
 object MutualInformation {

@@ -5,7 +5,7 @@ import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector}
 
 import scala.collection.immutable.{Vector => ScalaVector}
 
-object implicits {
+object extensions {
     implicit class RichVector(val self: Vector) extends AnyVal {
         def toIndexMap: Map[Double, Int] = distinct.zipWithIndex.toMap
 
