@@ -1,13 +1,13 @@
-name := "SparkSbtTest"
+name := "spark-ifs"
 
-version := "0.1"
+version := "1.0"
 
 scalaVersion := "2.11.12"
 
 scalacOptions := Seq("-feature")
 
-libraryDependencies += "org.apache.spark" %% "spark-sql" % "2.3.0"
-
-libraryDependencies += "org.apache.spark" %% "spark-mllib" % "2.3.0"
-
-libraryDependencies += "org.rogach" %% "scallop" % "3.1.2"
+libraryDependencies ++= Seq(
+    "org.apache.spark" %% "spark-sql" % "2.3.0",
+    "org.apache.spark" %% "spark-mllib" % "2.3.0",
+    "org.rogach" %% "scallop" % "3.1.2"
+)
