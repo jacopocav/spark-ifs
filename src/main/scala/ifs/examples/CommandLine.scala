@@ -3,7 +3,6 @@ package ifs.examples
 import ifs.ml.feature.{FeatureSelector, FeatureSelectorModel, RowSelector, RowSelectorModel}
 import ifs.util.extensions._
 import ifs.util.functions._
-import org.apache.log4j.{Level, Logger}
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.sql.SparkSession
@@ -14,10 +13,6 @@ import scala.io.Source
 
 object CommandLine {
     def main(args: Array[String]): Unit = {
-        // Muting non-error messages
-        Logger.getLogger("org").setLevel(Level.ERROR)
-        Logger.getLogger("akka").setLevel(Level.ERROR)
-
         val cli = new CsvArgs(args)
 
         if (cli.subcommand.contains(cli.gen)) {
@@ -47,8 +42,7 @@ object CommandLine {
             implicit val verbose: Boolean = subCli.verbose()
 
             val spark: SparkSession = SparkSession.builder
-                    .master("local[*]")
-                    .appName("Simple Application")
+                    .appName("spark-ifs")
                     .getOrCreate
 
             val cResult = subCli.file.toOption map { file =>
@@ -143,17 +137,17 @@ object CommandLine {
 
             println("/" * 80)
 
-        } else System.err.println("[scallop] Error: no subcommand specified")
+        } else cli.printHelp()
 
     }
 }
 
 class CsvArgs(val arguments: Seq[String]) extends ScallopConf(arguments) {
-    banner(
-        "This program can be used to do IFS on datasets loaded from csv files " +
+    banner("This program can be used to do IFS on datasets loaded from csv files " +
                 "(and to generate random datasets to csv).")
 
     object gen extends Subcommand("gen") with FileArgs {
+        banner("Generates a dataset with the given size.")
         val cols: ScallopOption[Int] =
             opt[Int](name = "cols",
                 short = 'c',
@@ -170,6 +164,8 @@ class CsvArgs(val arguments: Seq[String]) extends ScallopConf(arguments) {
     }
 
     object select extends Subcommand("select") with FileArgs {
+        banner("Selects the given number of features from the provided csv datasets. " +
+            "NOTE: for this task spark-submit must be used.")
         val num_features: ScallopOption[Int] =
             opt[Int](name = "num-features",
                 short = 'n',
