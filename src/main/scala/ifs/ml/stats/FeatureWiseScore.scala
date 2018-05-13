@@ -1,4 +1,4 @@
-package ifs.ml.feature.stats
+package ifs.ml.stats
 
 import breeze.linalg.Matrix
 import ifs.util.extensions._
@@ -7,14 +7,14 @@ import org.apache.spark.ml.linalg.Vector
 
 
 trait FeatureWiseScore extends Serializable {
-    def apply(featureVector: Vector, classVector: Vector, selectedVariables: Seq[LabeledPoint]): Double
+    def apply(featureVector: Vector, labelRow: Vector, selectedVariables: Seq[LabeledPoint]): Double
 }
 
 object FeatureMRMR extends FeatureWiseScore {
 
-    def apply(feature: Vector, classVector: Vector, selectedFeatures: Seq[LabeledPoint]): Double = {
+    def apply(feature: Vector, labelRow: Vector, selectedFeatures: Seq[LabeledPoint]): Double = {
 
-        val labelScore = discreteMI(feature, classVector)
+        val labelScore = discreteMI(feature, labelRow)
 
         val coefficient =
             if (selectedFeatures.nonEmpty) 1.0 / selectedFeatures.length

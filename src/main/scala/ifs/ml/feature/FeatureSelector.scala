@@ -17,7 +17,7 @@ private[feature] trait FeatureSelectorParams extends Params
     final val numTopFeatures = new Param[Int](this, "numTopFeatures",
         "Number of features that will be selected" +
                 "if total features < numSelectedFeatures, then all features will be selected",
-        ParamValidators.gtEq(1))
+        ParamValidators.gt(0))
     setDefault(numTopFeatures -> 10)
 
     def getNumSelectedFeatures: Int = $(numTopFeatures)
@@ -27,7 +27,7 @@ class FeatureSelector(override val uid: String) extends Estimator[FeatureSelecto
 
     def this() = this(Identifiable.randomUID("featureSelector"))
 
-    def setNumSelectedFeatures(value: Int): this.type = set(numTopFeatures -> value)
+    def setNumTopFeatures(value: Int): this.type = set(numTopFeatures -> value)
 
     def setLabelCol(value: String): this.type = set(labelCol -> value)
 

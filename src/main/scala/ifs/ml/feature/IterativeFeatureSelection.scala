@@ -1,7 +1,7 @@
 package ifs.ml.feature
 
 import breeze.linalg.Matrix
-import ifs.ml.feature.stats.{FeatureMRMR, FeatureWiseScore, InstanceMRMR, InstanceWiseScore}
+import ifs.ml.stats.{FeatureMRMR, FeatureWiseScore, InstanceMRMR, InstanceWiseScore}
 import org.apache.spark.SparkException
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
@@ -131,13 +131,10 @@ object IterativeFeatureSelection {
 
         val labelsRowB = data.context.broadcast(labelsRow)
 
-        val selectedScores = mutable.Buffer.empty[Double]
-        val selectedFeatures = mutable.Buffer.empty[LabeledPoint]
-
         val selectedFeatureScores = mutable.Buffer.empty[(LabeledPoint, Double)]
 
         (1 to num) foreach { _ =>
-            val selectedFeaturesB = data.context.broadcast(selectedFeatures.toVector)
+            val selectedFeaturesB = data.context.broadcast(selectedFeatureScores.map(_._1).toVector)
             val candidates = data.filter(x => !selectedFeaturesB.value.map(_.label).contains(x.label))
 
             val candidateScores = candidates map {c =>
@@ -154,8 +151,6 @@ object IterativeFeatureSelection {
             }
 
             selectedFeatureScores += ((selectedFeature, sc))
-            selectedScores += sc
-            selectedFeatures += selectedFeature
 
         }
 

@@ -1,4 +1,4 @@
-package ifs.ml.feature.stats
+package ifs.ml.stats
 
 import breeze.linalg.Matrix
 
