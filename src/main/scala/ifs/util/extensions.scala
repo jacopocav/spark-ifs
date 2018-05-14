@@ -90,6 +90,9 @@ object extensions {
       * This value class contains extension methods for [[String]]
       */
     implicit class RichString(val self: String) extends AnyVal {
+        /**
+          * Returns a String padded to the given length with the given character.
+          */
         def paddedTo(length: Int, padder: Char = ' '): String =
             self.padTo(length, padder).mkString
     }

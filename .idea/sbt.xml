@@ -5,6 +5,7 @@
     <option name="linkedExternalProjectsSettings">
       <SbtProjectSettings>
         <option name="externalProjectPath" value="D:\tesi\SparkSbtTest" />
+        <option name="useAutoImport" value="true" />
         <option name="useSbtShell" value="true" />
       </SbtProjectSettings>
     </option>

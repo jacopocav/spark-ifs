@@ -1,7 +1,7 @@
 package ifs.ml.feature
 
 import breeze.linalg.Matrix
-import ifs.ml.stats.{FeatureMRMR, FeatureWiseScore, InstanceMRMR, InstanceWiseScore}
+import ifs.ml.stats.{ColumnMRMR, ColumnWiseScore, RowMRMR, RowWiseScore}
 import org.apache.spark.SparkException
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
@@ -9,22 +9,31 @@ import org.apache.spark.rdd.RDD
 
 import scala.collection.{immutable, mutable}
 
+/**
+  * Functions that perform Iterative Feature Selection on RDDs of LabeledPoints.
+  */
 object IterativeFeatureSelection {
 
-    val maxCategories = 10000
-
+    /**
+      * Performs IFS on an RDD in conventional encoding (i.e. features are columns, instances are rows).
+      * @param num Number of features to select (it should lower than the total number of features).
+      * @param score Scoring function to use for selection.
+      * @return Sequence of selected feature indices, paired to their score.
+      */
     def selectColumns(data: RDD[LabeledPoint],
                       num: Int,
-                      score: InstanceWiseScore = InstanceMRMR): Seq[(Int, Double)] = {
+                      score: ColumnWiseScore = ColumnMRMR): Seq[(Int, Double)] = {
 
         data.cache()
         val selectedFeatures = mutable.Buffer.empty[(Int, Double)]
         val numCols = data.first().features.size
+        val actualNum = if(num <= numCols) num else numCols
 
-        (1 to num) foreach { _ =>
+        (1 to actualNum) foreach { _ =>
             val featureScores = computeScores(data, numCols, score, selectedFeatures.map(_._1))
 
-            selectedFeatures += featureScores.maxBy(_._2)
+            // Takes the best-scored feature (according to the score's ordering)
+            selectedFeatures += featureScores.sortBy(_._2)(score.ordering).head
         }
         // DEBUG
         //println("\n============================= SELECTED FEATURES ============================= ")
@@ -35,14 +44,16 @@ object IterativeFeatureSelection {
     // Based on spark.mllib.stat.test.chiSquaredFeatures
     private def computeScores(data: RDD[LabeledPoint],
                               numCols: Int,
-                              score: InstanceWiseScore = InstanceMRMR,
+                              score: ColumnWiseScore = ColumnMRMR,
                               selectedFeatures: Seq[Int]): Seq[(Int, Double)] = {
+
 
         val selectedFeaturesB = data.context.broadcast(selectedFeatures)
         val candidates = (0 until numCols).filter(!selectedFeaturesB.value.contains(_))
         val results = mutable.Buffer.empty[(Int, Double)]
         var labels: Option[Map[Double, Int]] = None
 
+        val maxCategories = 10000
         val batchSize = 1000
         var batch = 0
         while (batch * batchSize < numCols) {
@@ -120,20 +131,33 @@ object IterativeFeatureSelection {
                     }
 
                 }
-                results += (col -> score(labelContingency, featureContingencies.values.toSeq))
+                results += col -> score(labelContingency, featureContingencies.values.toSeq)
             }
             batch += 1
         }
         results.toVector
     }
 
-    def selectRows(data: RDD[LabeledPoint], num: Int, labelsRow: Vector, score: FeatureWiseScore = FeatureMRMR): Seq[(Int, Double)] = {
+    /**
+      * Performs IFS on RDDs in alternate encoding (i.e. features are rows, instances are columns).
+      * @param data RDD of [[LabeledPoint]] where the label must be a unique identifier.
+      * @param num Number of features to select (must be lower or equal to total number of features).
+      * @param labelsRow Vector containing label values associated to every instance (i.e. column).
+      * @param score The scoring function used for selection.
+      * @return Sequence of selected feature identifiers paired to their score.
+      */
+    def selectRows(data: RDD[LabeledPoint],
+                   num: Int, labelsRow: Vector,
+                   score: RowWiseScore = RowMRMR): Seq[(Double, Double)] = {
+
+        val rowSize = data.count()
+        val actualNum = if(num <= rowSize) num else rowSize
 
         val labelsRowB = data.context.broadcast(labelsRow)
 
         val selectedFeatureScores = mutable.Buffer.empty[(LabeledPoint, Double)]
 
-        (1 to num) foreach { _ =>
+        (1L to actualNum) foreach { _ =>
             val selectedFeaturesB = data.context.broadcast(selectedFeatureScores.map(_._1).toVector)
             val candidates = data.filter(x => !selectedFeaturesB.value.map(_.label).contains(x.label))
 
@@ -142,18 +166,19 @@ object IterativeFeatureSelection {
                 (c.label, cScore)
             }
 
-            val (lab, sc) = candidateScores.top(1)(Ordering[Double] on (_._2))(0)
+            // Takes the best-scoring feature
+            val (id, bestScore) = candidateScores.takeOrdered(1)(score.ordering on (_._2))(0)
 
             val selectedFeature: LabeledPoint = {
-                val filteredDB = candidates.filter(_.label == lab)
-                if (filteredDB.count() != 1) throw new RuntimeException(s"Multiple rows have the same identifier (id:$lab).")
+                val filteredDB = candidates.filter(_.label == id)
+                if (filteredDB.count() != 1) sys.error(s"Multiple rows have the same identifier ($id).")
                 else filteredDB.first()
             }
 
-            selectedFeatureScores += ((selectedFeature, sc))
+            selectedFeatureScores += selectedFeature -> bestScore
 
         }
 
-        selectedFeatureScores.map { case (lp, sc) => (lp.label.toInt, sc) }.toVector
+        selectedFeatureScores.map{ case (lp, sc) => (lp.label, sc) }.toVector
     }
 }

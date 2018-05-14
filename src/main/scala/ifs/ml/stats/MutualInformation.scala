@@ -4,9 +4,16 @@ import breeze.linalg.Matrix
 import ifs.util.extensions._
 import org.apache.spark.ml.linalg.Vector
 
-
+/**
+  * This object can be called to compute mutual information on a contingency matrix or on two instance vectors.
+  */
 object MutualInformation {
 
+    /**
+      * Computes mutual information on the given matrix.
+      * @param contingency The contingency matrix of two vectors.
+      * @return Mutual information of the two vectors represented by the matrix.
+      */
     def apply(contingency: Matrix[Long]): Double = {
 
         val (colSums, rowSums) = contingency.colRowSums
@@ -24,6 +31,12 @@ object MutualInformation {
         mi
     }
 
+    /**
+      * Computes the contingency matrix of the two vectors and their mutual information.
+      * @param a Vector of instances.
+      * @param b Another vector of instances (its length must be the same as the first).
+      * @return Mutual information between a and b
+      */
     def apply(a: Vector, b: Vector): Double = {
 
         require(a.size == b.size, s"Vectors a and b must have the same length: a:${a.size} != b:${b.size}")

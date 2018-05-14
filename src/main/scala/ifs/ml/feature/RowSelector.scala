@@ -8,7 +8,7 @@ import org.apache.spark.ml.param.{Param, ParamMap, ParamValidators}
 import org.apache.spark.ml.util.{DefaultParamsWritable, Identifiable}
 import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.{BooleanType, DoubleType, NumericType, StructType}
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset, Row}
 
 private[feature] trait RowSelectorParams extends DefaultParamsWritable with HasFeaturesCol with HasOutputCol {
@@ -41,7 +41,7 @@ private[feature] trait RowSelectorParams extends DefaultParamsWritable with HasF
     def isFiltered: Boolean = $(filtered)
 }
 
-class RowSelector(override val uid: String)
+final class RowSelector(override val uid: String)
         extends Estimator[RowSelectorModel] with DefaultParamsWritable with RowSelectorParams {
 
     def this() = this(Identifiable.randomUID("rowSelector"))
@@ -68,7 +68,7 @@ class RowSelector(override val uid: String)
 
         val labVec = Vectors.dense($(labelVector))
 
-        val selected = IterativeFeatureSelection.selectRows(input, $(numTopRows), labVec).map(_._1)
+        val selected = IterativeFeatureSelection.selectRows(input, $(numTopRows), labVec).map(_._1.toInt)
 
         new RowSelectorModel(selected).setParent(this)
                 .setIdCol($(idCol))
@@ -78,7 +78,8 @@ class RowSelector(override val uid: String)
 
     override def transformSchema(schema: StructType): StructType = {
         require(schema($(featuresCol)).dataType == VectorType, s"Column '${$(featuresCol)}' must contain vectors.")
-        require(schema($(idCol)).dataType.isInstanceOf[NumericType], s"Column '${$(idCol)}' must be numeric.")
+        require(schema($(idCol)).dataType == LongType
+                | schema($(idCol)).dataType == IntegerType, s"Column '${$(idCol)}' must be integral.")
 
         require($(labelVector).nonEmpty, s"labelVector is empty.")
 
@@ -90,7 +91,7 @@ class RowSelector(override val uid: String)
 }
 
 
-class RowSelectorModel private[ml](override val uid: String,
+final class RowSelectorModel private[ml](override val uid: String,
                                    val selectedRows: Seq[Int])
         extends Model[RowSelectorModel] with RowSelectorParams {
 

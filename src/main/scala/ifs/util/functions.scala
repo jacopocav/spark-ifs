@@ -44,7 +44,7 @@ object functions {
       * @param rows Number of rows of the desired matrix
       * @param cols Number of columns of the desired matrix
       * @param convFile If it's not None, then the conventional encoded matrix is saved to this path.
-      * @param altFiles If it's not None, then the alternate encoded matrix is savet to the first path,
+      * @param altFiles If it's not None, then the alternate encoded matrix is saved to the first path,
       *                 and the label row is saved to the second one.
       */
     def randomMatricesToCsv(rows: Int, cols: Int, convFile: Option[String], altFiles: Option[(String, String)]): Unit = {

@@ -18,6 +18,7 @@ object CommandLine {
         if (cli.subcommand.contains(cli.gen)) {
             // CSV GENERATION MODE
             val subCli = cli.gen
+
             val rows = subCli.rows()
             val cols = subCli.cols()
 
@@ -39,6 +40,7 @@ object CommandLine {
             // CSV SELECTION MODE
 
             val subCli = cli.select
+
             implicit val verbose: Boolean = subCli.verbose()
 
             val spark: SparkSession = SparkSession.builder
@@ -142,7 +144,8 @@ object CommandLine {
     }
 }
 
-class CsvArgs(val arguments: Seq[String]) extends ScallopConf(arguments) {
+
+private[examples] class CsvArgs(val arguments: Seq[String]) extends ScallopConf(arguments) {
     banner("This program can be used to do IFS on datasets loaded from csv files " +
                 "(and to generate random datasets to csv).")
 
@@ -170,6 +173,7 @@ class CsvArgs(val arguments: Seq[String]) extends ScallopConf(arguments) {
             opt[Int](name = "num-features",
                 short = 'n',
                 required = true,
+                validate = _ > 0,
                 descr = "Number of features (columns) to be selected")
         val verbose: ScallopOption[Boolean] =
             toggle(name = "verbose",
@@ -184,7 +188,7 @@ class CsvArgs(val arguments: Seq[String]) extends ScallopConf(arguments) {
     verify()
 }
 
-trait FileArgs extends ScallopConf {
+private[examples] trait FileArgs extends ScallopConf {
     val altFile: ScallopOption[String] =
         opt(name = "alt-file",
             descr = "Path to the csv in alternate encoding (without the label row)",
