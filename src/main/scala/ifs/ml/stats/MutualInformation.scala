@@ -10,29 +10,8 @@ import org.apache.spark.ml.linalg.Vector
 object MutualInformation {
 
     /**
-      * Computes mutual information on the given matrix.
-      * @param contingency The contingency matrix of two vectors.
-      * @return Mutual information of the two vectors represented by the matrix.
-      */
-    def apply(contingency: Matrix[Long]): Double = {
-
-        val (colSums, rowSums) = contingency.colRowSums
-        val tot = colSums.sum.toDouble
-
-        var mi = 0.0
-
-        contingency foreachPair  {case ((row, col), value) =>
-            val pxy = value / tot
-            val px = rowSums(row) / tot
-            val py = colSums(col) / tot
-
-            if(pxy > 0.0) mi += pxy * Math.log(pxy / (px * py))
-        }
-        mi
-    }
-
-    /**
       * Computes the contingency matrix of the two vectors and their mutual information.
+      *
       * @param a Vector of instances.
       * @param b Another vector of instances (its length must be the same as the first).
       * @return Mutual information between a and b
@@ -72,5 +51,28 @@ object MutualInformation {
             mat(bLevels(0.0), aLevels(0.0)) = a.size - nonZeroCount
 
         apply(mat)
+    }
+
+    /**
+      * Computes mutual information on the given matrix.
+      *
+      * @param contingency The contingency matrix of two vectors.
+      * @return Mutual information of the two vectors represented by the matrix.
+      */
+    def apply(contingency: Matrix[Long]): Double = {
+
+        val (colSums, rowSums) = contingency.colRowSums
+        val tot = colSums.sum.toDouble
+
+        var mi = 0.0
+
+        contingency foreachPair { case ((row, col), value) =>
+            val pxy = value / tot
+            val px = rowSums(row) / tot
+            val py = colSums(col) / tot
+
+            if (pxy > 0.0) mi += pxy * Math.log(pxy / (px * py))
+        }
+        mi
     }
 }

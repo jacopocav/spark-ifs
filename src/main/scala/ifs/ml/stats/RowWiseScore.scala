@@ -10,10 +10,11 @@ import org.apache.spark.ml.linalg.Vector
 trait RowWiseScore extends Serializable {
     /**
       * Computes a score for the candidate feature.
-      * @param feature The candidate feature vector (i.e. row).
-      * @param labelRow Vector containing label values associated to every instance (i.e. column).
+      *
+      * @param feature          The candidate feature vector (i.e. row).
+      * @param labelRow         Vector containing label values associated to every instance (i.e. column).
       * @param selectedFeatures Collection of [[LabeledPoint]] that represent selected feature vectors
-      *                          in the `features` field and their identifier in the `label` field.
+      *                         in the `features` field and their identifier in the `label` field.
       * @return The computed score
       */
     def apply(feature: Vector, labelRow: Vector, selectedFeatures: Seq[LabeledPoint]): Double
@@ -30,11 +31,17 @@ trait RowWiseScore extends Serializable {
 object RowMRMR extends RowWiseScore {
 
     /**
+      * Descending score ordering (i.e. higher is better)
+      */
+    val ordering: Ordering[Double] = Ordering[Double].reverse
+
+    /**
       * Computes the mRMR score for the candidate feature.
-      * @param feature The candidate feature vector (i.e. row).
-      * @param labelRow Vector containing label values associated to every instance (i.e. column).
+      *
+      * @param feature          The candidate feature vector (i.e. row).
+      * @param labelRow         Vector containing label values associated to every instance (i.e. column).
       * @param selectedFeatures Collection of [[LabeledPoint]] that represent selected feature vectors
-      *                          in the `features` field and their identifier in the `label` field.
+      *                         in the `features` field and their identifier in the `label` field.
       * @return The computed score
       */
     def apply(feature: Vector, labelRow: Vector, selectedFeatures: Seq[LabeledPoint]): Double = {
@@ -55,9 +62,4 @@ object RowMRMR extends RowWiseScore {
         }
         else labelScore
     }
-
-    /**
-      * Descending score ordering (i.e. higher is better)
-      */
-    val ordering: Ordering[Double] = Ordering[Double].reverse
 }

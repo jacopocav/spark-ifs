@@ -16,7 +16,8 @@ object IterativeFeatureSelection {
 
     /**
       * Performs IFS on an RDD in conventional encoding (i.e. features are columns, instances are rows).
-      * @param num Number of features to select (it should lower than the total number of features).
+      *
+      * @param num   Number of features to select (it should lower than the total number of features).
       * @param score Scoring function to use for selection.
       * @return Sequence of selected feature indices, paired to their score.
       */
@@ -27,7 +28,7 @@ object IterativeFeatureSelection {
         data.cache()
         val selectedFeatures = mutable.Buffer.empty[(Int, Double)]
         val numCols = data.first().features.size
-        val actualNum = if(num <= numCols) num else numCols
+        val actualNum = if (num <= numCols) num else numCols
 
         (1 to actualNum) foreach { _ =>
             val featureScores = computeScores(data, numCols, score, selectedFeatures.map(_._1))
@@ -140,10 +141,11 @@ object IterativeFeatureSelection {
 
     /**
       * Performs IFS on RDDs in alternate encoding (i.e. features are rows, instances are columns).
-      * @param data RDD of [[LabeledPoint]] where the label must be a unique identifier.
-      * @param num Number of features to select (must be lower or equal to total number of features).
+      *
+      * @param data      RDD of [[LabeledPoint]] where the label must be a unique identifier.
+      * @param num       Number of features to select (must be lower or equal to total number of features).
       * @param labelsRow Vector containing label values associated to every instance (i.e. column).
-      * @param score The scoring function used for selection.
+      * @param score     The scoring function used for selection.
       * @return Sequence of selected feature identifiers paired to their score.
       */
     def selectRows(data: RDD[LabeledPoint],
@@ -151,7 +153,7 @@ object IterativeFeatureSelection {
                    score: RowWiseScore = RowMRMR): Seq[(Double, Double)] = {
 
         val rowSize = data.count()
-        val actualNum = if(num <= rowSize) num else rowSize
+        val actualNum = if (num <= rowSize) num else rowSize
 
         val labelsRowB = data.context.broadcast(labelsRow)
 
@@ -161,7 +163,7 @@ object IterativeFeatureSelection {
             val selectedFeaturesB = data.context.broadcast(selectedFeatureScores.map(_._1).toVector)
             val candidates = data.filter(x => !selectedFeaturesB.value.map(_.label).contains(x.label))
 
-            val candidateScores = candidates map {c =>
+            val candidateScores = candidates map { c =>
                 val cScore = score(c.features, labelsRowB.value, selectedFeaturesB.value)
                 (c.label, cScore)
             }
@@ -179,6 +181,6 @@ object IterativeFeatureSelection {
 
         }
 
-        selectedFeatureScores.map{ case (lp, sc) => (lp.label, sc) }.toVector
+        selectedFeatureScores.map { case (lp, sc) => (lp.label, sc) }.toVector
     }
 }

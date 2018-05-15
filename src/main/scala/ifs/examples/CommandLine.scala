@@ -11,6 +11,38 @@ import org.rogach.scallop.{ScallopConf, ScallopOption, Subcommand}
 
 import scala.io.Source
 
+/**
+  * This example is used to test wether ColumnSelector and RowSelector work correctly and select the same features.
+  * Datasets can be generated in both encodings and saved to csv through the `gen` sub-command.
+  * With the `select` sub-command, IFS can be performed on previously-generated Datasets in csv format.
+  * The program will print out the total fit time of both methods and whether the selected features were identical
+  * between the two.
+  *
+  * Usage instructions (this is the output of the --help or -h command):
+  * {{{
+  *     This program can be used to do IFS on datasets loaded from csv files (and to generate random datasets to csv).
+  *       -h, --help   Show help message
+  *
+  *     Subcommand: gen
+  *     Generates a dataset with the given size.
+  *       -a, --alt-file  <arg>   Path to the csv in alternate encoding (without the label row)
+  *       -c, --cols  <arg>       Number of columns
+  *       -f, --file  <arg>       Path to the csv in conventional encoding
+  *       -l, --labels  <arg>     Path to the csv containing the label row (required for alternate encoding)
+  *       -r, --rows  <arg>       Number of rows
+  *       -h, --help              Show help message
+  *     Subcommand: select
+  *     Selects the given number of features from the provided csv datasets.
+  *     NOTE: for this task spark-submit must be used.
+  *       -a, --alt-file  <arg>       Path to the csv in alternate encoding (without the label row)
+  *       -f, --file  <arg>           Path to the csv in conventional encoding
+  *       -l, --labels  <arg>         Path to the csv containing the label row (required for alternate encoding)
+  *       -n, --num-features  <arg>   Number of features (columns) to be selected
+  *       -v, --verbose               Prints more information during execution
+  *           --noverbose             Only prints the results
+  *       -h, --help                  Show help message
+  * }}}
+  */
 object CommandLine {
     def main(args: Array[String]): Unit = {
         val cli = new CsvArgs(args)
@@ -147,7 +179,7 @@ object CommandLine {
 
 private[examples] class CsvArgs(val arguments: Seq[String]) extends ScallopConf(arguments) {
     banner("This program can be used to do IFS on datasets loaded from csv files " +
-                "(and to generate random datasets to csv).")
+            "(and to generate random datasets to csv).")
 
     object gen extends Subcommand("gen") with FileArgs {
         banner("Generates a dataset with the given size.")
@@ -168,7 +200,7 @@ private[examples] class CsvArgs(val arguments: Seq[String]) extends ScallopConf(
 
     object select extends Subcommand("select") with FileArgs {
         banner("Selects the given number of features from the provided csv datasets. " +
-            "NOTE: for this task spark-submit must be used.")
+                "NOTE: for this task spark-submit must be used.")
         val num_features: ScallopOption[Int] =
             opt[Int](name = "num-features",
                 short = 'n',

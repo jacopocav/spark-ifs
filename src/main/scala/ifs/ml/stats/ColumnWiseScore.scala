@@ -9,7 +9,8 @@ import breeze.linalg.Matrix
 trait ColumnWiseScore extends Serializable {
     /**
       * Computes a score for the candidate feature by using contingency matrices.
-      * @param labelContingency The label-candidate contingency matrix.
+      *
+      * @param labelContingency      The label-candidate contingency matrix.
       * @param featuresContingencies All candidate-selected feature contingency matrices.
       * @return A decimal score.
       */
@@ -26,8 +27,14 @@ trait ColumnWiseScore extends Serializable {
   */
 object ColumnMRMR extends ColumnWiseScore {
     /**
+      * Descending score ordering (higher is better)
+      */
+    val ordering: Ordering[Double] = Ordering[Double].reverse
+
+    /**
       * Computes the mRMR score of the candidate feature.
-      * @param labelContingency The label-candidate contingency matrix.
+      *
+      * @param labelContingency      The label-candidate contingency matrix.
       * @param featuresContingencies All candidate-selected feature contingency matrices.
       * @return A decimal score (higher is better).
       */
@@ -38,14 +45,9 @@ object ColumnMRMR extends ColumnWiseScore {
             if (featuresContingencies.nonEmpty) 1.0 / featuresContingencies.length
             else 0.0
 
-        if(coefficient != 0.0) {
-            val featuresScore = (0.0 /: featuresContingencies)((acc, mat) => acc + MutualInformation(mat))
+        if (coefficient != 0.0) {
+            val featuresScore = (0.0 /: featuresContingencies) ((acc, mat) => acc + MutualInformation(mat))
             labelScore - (coefficient * featuresScore)
         } else labelScore
     }
-
-    /**
-      * Descending score ordering (higher is better)
-      */
-    val ordering: Ordering[Double] = Ordering[Double].reverse
 }
